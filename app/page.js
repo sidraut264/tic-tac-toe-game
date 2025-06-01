@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export default function TicTacToe() {
   const [board, setBoard] = useState(Array(9).fill(null));
@@ -55,7 +55,7 @@ export default function TicTacToe() {
   };
 
   // AI Logic
-  const minimax = (squares, depth, isMaximizing, alpha = -Infinity, beta = Infinity) => {
+  const minimax = useCallback((squares, depth, isMaximizing, alpha = -Infinity, beta = Infinity) => {
     const winningLines = getWinningLines(boardSize);
     
     // Check for winner
@@ -100,9 +100,9 @@ export default function TicTacToe() {
       }
       return minEval;
     }
-  };
+  }, [boardSize]);
 
-  const getBestMove = (squares) => {
+  const getBestMove = useCallback((squares) => {
     const emptyCells = squares.map((cell, index) => cell === null ? index : null).filter(val => val !== null);
     
     if (emptyCells.length === 0) return null;
@@ -131,7 +131,7 @@ export default function TicTacToe() {
     }
     
     return bestMove !== null ? bestMove : emptyCells[0];
-  };
+  }, [difficulty, minimax]);
 
   // Timer effect
   useEffect(() => {
@@ -178,7 +178,7 @@ export default function TicTacToe() {
       }, 800); // AI thinks for 800ms
       return () => clearTimeout(timer);
     }
-  }, [aiMode, isXNext, board, winner, isDraw, frozenPlayer, doubleMove, gameMode]);
+  }, [aiMode, isXNext, board, winner, isDraw, frozenPlayer, doubleMove, gameMode, getBestMove]);
 
   // Frozen player effect
   useEffect(() => {
@@ -276,10 +276,7 @@ export default function TicTacToe() {
     }
   };
 
-  const useBombPowerUp = () => {
-    const currentPlayer = isXNext ? 'X' : 'O';
-    if (powerUps[currentPlayer].bomb <= 0) return;
-
+  const handleBombPowerUp = (currentPlayer) => {
     // Remove a random opponent's piece
     const opponentPieces = board.map((piece, index) => 
       piece === (currentPlayer === 'X' ? 'O' : 'X') ? index : null
@@ -301,7 +298,7 @@ export default function TicTacToe() {
     }
   };
 
-  const usePowerUp = (type) => {
+  const handlePowerUp = (type) => {
     const currentPlayer = isXNext ? 'X' : 'O';
     if (powerUps[currentPlayer][type] <= 0) return;
 
@@ -318,7 +315,7 @@ export default function TicTacToe() {
     } else if (type === 'double') {
       setDoubleMove(true);
     } else if (type === 'bomb') {
-      useBombPowerUp();
+      handleBombPowerUp(currentPlayer);
     }
   };
 
@@ -524,21 +521,21 @@ export default function TicTacToe() {
               <div className="font-bold text-blue-600 mb-2">Player X Powers</div>
               <div className="flex gap-1 justify-center flex-wrap">
                 <button
-                  onClick={() => usePowerUp('freeze')}
+                  onClick={() => handlePowerUp('freeze')}
                   disabled={powerUps.X.freeze === 0 || !isXNext || (aiMode && !isXNext)}
                   className="px-2 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600 text-sm"
                 >
                   ❄️ ({powerUps.X.freeze})
                 </button>
                 <button
-                  onClick={() => usePowerUp('double')}
+                  onClick={() => handlePowerUp('double')}
                   disabled={powerUps.X.double === 0 || !isXNext || (aiMode && !isXNext)}
                   className="px-2 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600 text-sm"
                 >
                   ⚡ ({powerUps.X.double})
                 </button>
                 <button
-                  onClick={() => usePowerUp('bomb')}
+                  onClick={() => handlePowerUp('bomb')}
                   disabled={powerUps.X.bomb === 0 || !isXNext || (aiMode && !isXNext)}
                   className="px-2 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600 text-sm"
                 >
@@ -550,21 +547,21 @@ export default function TicTacToe() {
               <div className="font-bold text-red-600 mb-2">{aiMode ? 'AI' : 'Player O'} Powers</div>
               <div className="flex gap-1 justify-center flex-wrap">
                 <button
-                  onClick={() => usePowerUp('freeze')}
+                  onClick={() => handlePowerUp('freeze')}
                   disabled={powerUps.O.freeze === 0 || isXNext || aiMode}
                   className="px-2 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600 text-sm"
                 >
                   ❄️ ({powerUps.O.freeze})
                 </button>
                 <button
-                  onClick={() => usePowerUp('double')}
+                  onClick={() => handlePowerUp('double')}
                   disabled={powerUps.O.double === 0 || isXNext || aiMode}
                   className="px-2 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600 text-sm"
                 >
                   ⚡ ({powerUps.O.double})
                 </button>
                 <button
-                  onClick={() => usePowerUp('bomb')}
+                  onClick={() => handlePowerUp('bomb')}
                   disabled={powerUps.O.bomb === 0 || isXNext || aiMode}
                   className="px-2 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600 text-sm"
                 >
@@ -610,13 +607,13 @@ export default function TicTacToe() {
             </div>
           ) : isDraw ? (
             <div className="text-3xl font-bold text-orange-600">
-              🤝 It's a Draw! 🤝
+              🤝 It&apos;s a Draw! 🤝
             </div>
           ) : (
             <div className={`text-xl font-semibold ${frozenPlayer === (isXNext ? 'X' : 'O') ? 'text-blue-400' : 'text-gray-700'}`}>
               {frozenPlayer === (isXNext ? 'X' : 'O') ? `❄️ ${isXNext ? 'Player X' : (aiMode ? 'AI' : 'Player O')} is Frozen!` : 
                doubleMove ? `⚡ ${isXNext ? 'Player X' : (aiMode ? 'AI' : 'Player O')} gets another turn!` :
-               `${isXNext ? 'Player X' : (aiMode ? 'AI' : 'Player O')}'s Turn${aiMode && !isXNext ? ' (Thinking...)' : ''}`}
+               `${isXNext ? 'Player X' : (aiMode ? 'AI' : 'Player O')}&apos;s Turn${aiMode && !isXNext ? ' (Thinking...)' : ''}`}
             </div>
           )}
         </div>
