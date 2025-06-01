@@ -455,17 +455,17 @@ export default function TicTacToe() {
                   }}
                   className="rounded"
                 />
-                <span className="text-sm">Play vs AI</span>
+                <span className="text-sm font-medium text-gray-700">Play vs AI</span>
               </label>
               {aiMode && (
                 <select
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value)}
-                  className="px-2 py-1 rounded border text-sm"
+                  className="px-3 py-2 rounded-lg border-2 border-gray-300 bg-white text-gray-700 font-medium text-sm shadow-sm hover:border-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all"
                 >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
+                  <option value="easy">🟢 Easy</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="hard">🔴 Hard</option>
                 </select>
               )}
             </div>
@@ -477,12 +477,12 @@ export default function TicTacToe() {
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value)}
-              className="px-3 py-1 rounded border"
+              className="px-3 py-2 rounded-lg border-2 border-gray-300 bg-white text-gray-700 font-medium shadow-sm hover:border-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all"
             >
-              <option value="gradient">Gradient</option>
-              <option value="dark">Dark</option>
-              <option value="ocean">Ocean</option>
-              <option value="forest">Forest</option>
+              <option value="gradient">🌈 Gradient</option>
+              <option value="dark">🌙 Dark</option>
+              <option value="ocean">🌊 Ocean</option>
+              <option value="forest">🌲 Forest</option>
             </select>
           </div>
         </div>
