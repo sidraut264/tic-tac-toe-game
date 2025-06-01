@@ -9,13 +9,13 @@ export default function TicTacToe() {
   const [isDraw, setIsDraw] = useState(false);
   const [scores, setScores] = useState({ X: 0, O: 0, draws: 0 });
 
-  const winningLines = [
-    [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
-    [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
-    [0, 4, 8], [2, 4, 6] // diagonals
-  ];
-
   useEffect(() => {
+    const winningLines = [
+      [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+      [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+      [0, 4, 8], [2, 4, 6] // diagonals
+    ];
+
     const checkWinner = (squares) => {
       for (let line of winningLines) {
         const [a, b, c] = line;
@@ -116,11 +116,11 @@ export default function TicTacToe() {
             </div>
           ) : isDraw ? (
             <div className="text-2xl font-bold text-orange-600">
-              🤝 It's a Draw! 🤝
+              🤝 It&apos;s a Draw! 🤝
             </div>
           ) : (
             <div className="text-xl font-semibold text-gray-700">
-              Player {isXNext ? 'X' : 'O'}'s Turn
+              Player {isXNext ? 'X' : 'O'}&apos;s Turn
             </div>
           )}
         </div>
