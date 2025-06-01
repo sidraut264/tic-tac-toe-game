@@ -8,16 +8,21 @@ export default function TicTacToe() {
   const [winner, setWinner] = useState(null);
   const [isDraw, setIsDraw] = useState(false);
   const [scores, setScores] = useState({ X: 0, O: 0, draws: 0 });
-  const [gameMode, setGameMode] = useState('classic'); // classic, time-attack, power-ups
+  const [gameMode, setGameMode] = useState('classic');
   const [timeLeft, setTimeLeft] = useState(10);
   const [isTimeRunning, setIsTimeRunning] = useState(false);
-  const [powerUps, setPowerUps] = useState({ X: { freeze: 1, double: 1 }, O: { freeze: 1, double: 1 } });
+  const [powerUps, setPowerUps] = useState({ X: { freeze: 1, double: 1, bomb: 1 }, O: { freeze: 1, double: 1, bomb: 1 } });
   const [frozenPlayer, setFrozenPlayer] = useState(null);
   const [doubleMove, setDoubleMove] = useState(false);
   const [moveHistory, setMoveHistory] = useState([]);
   const [winningLine, setWinningLine] = useState([]);
-  const [boardSize, setBoardSize] = useState(3); // 3x3, 4x4, 5x5
+  const [boardSize, setBoardSize] = useState(3);
   const [particles, setParticles] = useState([]);
+  const [gameStats, setGameStats] = useState({ totalGames: 0, longestWinStreak: 0, currentStreak: 0, streakPlayer: null });
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [theme, setTheme] = useState('gradient');
+  const [aiMode, setAiMode] = useState(false);
+  const [difficulty, setDifficulty] = useState('medium');
 
   const createBoard = (size) => Array(size * size).fill(null);
 
@@ -49,6 +54,85 @@ export default function TicTacToe() {
     return lines;
   };
 
+  // AI Logic
+  const minimax = (squares, depth, isMaximizing, alpha = -Infinity, beta = Infinity) => {
+    const winningLines = getWinningLines(boardSize);
+    
+    // Check for winner
+    for (let line of winningLines) {
+      const firstSquare = squares[line[0]];
+      if (firstSquare && line.every(index => squares[index] === firstSquare)) {
+        if (firstSquare === 'O') return 10 - depth;  // AI wins
+        if (firstSquare === 'X') return depth - 10;  // Human wins
+      }
+    }
+    
+    // Check for draw
+    if (squares.every(square => square !== null)) return 0;
+    
+    // Limit search depth for performance
+    if (depth > 6) return 0;
+    
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+      for (let i = 0; i < squares.length; i++) {
+        if (squares[i] === null) {
+          squares[i] = 'O';
+          const evaluation = minimax(squares, depth + 1, false, alpha, beta);
+          squares[i] = null;
+          maxEval = Math.max(maxEval, evaluation);
+          alpha = Math.max(alpha, evaluation);
+          if (beta <= alpha) break; // Alpha-beta pruning
+        }
+      }
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+      for (let i = 0; i < squares.length; i++) {
+        if (squares[i] === null) {
+          squares[i] = 'X';
+          const evaluation = minimax(squares, depth + 1, true, alpha, beta);
+          squares[i] = null;
+          minEval = Math.min(minEval, evaluation);
+          beta = Math.min(beta, evaluation);
+          if (beta <= alpha) break; // Alpha-beta pruning
+        }
+      }
+      return minEval;
+    }
+  };
+
+  const getBestMove = (squares) => {
+    const emptyCells = squares.map((cell, index) => cell === null ? index : null).filter(val => val !== null);
+    
+    if (emptyCells.length === 0) return null;
+    
+    if (difficulty === 'easy') {
+      // 70% random, 30% optimal
+      if (Math.random() < 0.7) {
+        return emptyCells[Math.floor(Math.random() * emptyCells.length)];
+      }
+    }
+    
+    // For medium/hard and the 30% smart moves in easy
+    let bestScore = -Infinity;
+    let bestMove = null;
+    
+    for (let i = 0; i < squares.length; i++) {
+      if (squares[i] === null) {
+        const testBoard = [...squares];
+        testBoard[i] = 'O';
+        const score = minimax(testBoard, 0, false);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = i;
+        }
+      }
+    }
+    
+    return bestMove !== null ? bestMove : emptyCells[0];
+  };
+
   // Timer effect
   useEffect(() => {
     let interval;
@@ -56,6 +140,10 @@ export default function TicTacToe() {
       interval = setInterval(() => {
         setTimeLeft(time => {
           if (time <= 1) {
+            if (aiMode && !isXNext) {
+              // AI's turn, don't switch
+              return 10;
+            }
             setIsXNext(!isXNext);
             return 10;
           }
@@ -64,7 +152,33 @@ export default function TicTacToe() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isTimeRunning, timeLeft, winner, isDraw, gameMode, isXNext]);
+  }, [isTimeRunning, timeLeft, winner, isDraw, gameMode, isXNext, aiMode]);
+
+  // AI Move Effect
+  useEffect(() => {
+    if (aiMode && !isXNext && !winner && !isDraw && frozenPlayer !== 'O') {
+      const timer = setTimeout(() => {
+        const bestMove = getBestMove([...board]); // Pass a copy of the board
+        if (bestMove !== null && bestMove !== undefined) {
+          // Simulate AI click
+          const newBoard = [...board];
+          newBoard[bestMove] = 'O';
+          setBoard(newBoard);
+          setMoveHistory(prev => [...prev, { player: 'O', index: bestMove, timestamp: Date.now() }]);
+          
+          if (doubleMove) {
+            setDoubleMove(false);
+          } else {
+            setIsXNext(true);
+            if (gameMode === 'time-attack') {
+              setTimeLeft(10);
+            }
+          }
+        }
+      }, 800); // AI thinks for 800ms
+      return () => clearTimeout(timer);
+    }
+  }, [aiMode, isXNext, board, winner, isDraw, frozenPlayer, doubleMove, gameMode]);
 
   // Frozen player effect
   useEffect(() => {
@@ -104,7 +218,32 @@ export default function TicTacToe() {
         ...prev,
         [gameWinner]: prev[gameWinner] + 1
       }));
-      createWinParticles();
+      
+      // Update game stats
+      setGameStats(prev => {
+        const newStats = { ...prev, totalGames: prev.totalGames + 1 };
+        if (prev.streakPlayer === gameWinner) {
+          newStats.currentStreak = prev.currentStreak + 1;
+          newStats.longestWinStreak = Math.max(prev.longestWinStreak, newStats.currentStreak);
+        } else {
+          newStats.currentStreak = 1;
+          newStats.streakPlayer = gameWinner;
+        }
+        return newStats;
+      });
+      
+      // Create win particles
+      const newParticles = [];
+      for (let i = 0; i < 50; i++) {
+        newParticles.push({
+          id: i,
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          color: gameWinner === 'X' ? 'blue' : 'red'
+        });
+      }
+      setParticles(newParticles);
+      setTimeout(() => setParticles([]), 3000);
     } else if (gameDraw && !gameWinner) {
       setIsDraw(true);
       setIsTimeRunning(false);
@@ -112,26 +251,14 @@ export default function TicTacToe() {
         ...prev,
         draws: prev.draws + 1
       }));
+      setGameStats(prev => ({ ...prev, totalGames: prev.totalGames + 1, currentStreak: 0, streakPlayer: null }));
     }
   }, [board, boardSize]);
-
-  const createWinParticles = () => {
-    const newParticles = [];
-    for (let i = 0; i < 50; i++) {
-      newParticles.push({
-        id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        color: winner === 'X' ? 'blue' : 'red'
-      });
-    }
-    setParticles(newParticles);
-    setTimeout(() => setParticles([]), 3000);
-  };
 
   const handleClick = (index) => {
     if (board[index] || winner || isDraw) return;
     if (frozenPlayer === (isXNext ? 'X' : 'O')) return;
+    if (aiMode && !isXNext) return; // Prevent human from moving during AI turn
 
     const newBoard = [...board];
     const currentPlayer = isXNext ? 'X' : 'O';
@@ -146,6 +273,31 @@ export default function TicTacToe() {
       if (gameMode === 'time-attack') {
         setTimeLeft(10);
       }
+    }
+  };
+
+  const useBombPowerUp = () => {
+    const currentPlayer = isXNext ? 'X' : 'O';
+    if (powerUps[currentPlayer].bomb <= 0) return;
+
+    // Remove a random opponent's piece
+    const opponentPieces = board.map((piece, index) => 
+      piece === (currentPlayer === 'X' ? 'O' : 'X') ? index : null
+    ).filter(index => index !== null);
+    
+    if (opponentPieces.length > 0) {
+      const randomIndex = opponentPieces[Math.floor(Math.random() * opponentPieces.length)];
+      const newBoard = [...board];
+      newBoard[randomIndex] = null;
+      setBoard(newBoard);
+      
+      setPowerUps(prev => ({
+        ...prev,
+        [currentPlayer]: {
+          ...prev[currentPlayer],
+          bomb: prev[currentPlayer].bomb - 1
+        }
+      }));
     }
   };
 
@@ -165,6 +317,8 @@ export default function TicTacToe() {
       setFrozenPlayer(currentPlayer === 'X' ? 'O' : 'X');
     } else if (type === 'double') {
       setDoubleMove(true);
+    } else if (type === 'bomb') {
+      useBombPowerUp();
     }
   };
 
@@ -194,7 +348,7 @@ export default function TicTacToe() {
     setWinningLine([]);
     setParticles([]);
     if (gameMode === 'power-ups') {
-      setPowerUps({ X: { freeze: 1, double: 1 }, O: { freeze: 1, double: 1 } });
+      setPowerUps({ X: { freeze: 1, double: 1, bomb: 1 }, O: { freeze: 1, double: 1, bomb: 1 } });
     }
   };
 
@@ -205,6 +359,19 @@ export default function TicTacToe() {
     setIsDraw(false);
     setMoveHistory([]);
     setWinningLine([]);
+  };
+
+  const getThemeClasses = () => {
+    switch (theme) {
+      case 'dark':
+        return 'bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900';
+      case 'ocean':
+        return 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600';
+      case 'forest':
+        return 'bg-gradient-to-br from-green-400 via-green-500 to-green-600';
+      default:
+        return 'bg-gradient-to-br from-purple-400 via-pink-500 to-red-500';
+    }
   };
 
   const renderSquare = (index) => {
@@ -232,47 +399,100 @@ export default function TicTacToe() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className={`min-h-screen ${getThemeClasses()} flex items-center justify-center p-4 relative overflow-hidden`}>
       {/* Animated particles */}
       {particles.map(particle => (
         <div
           key={particle.id}
-          className={`absolute w-2 h-2 rounded-full animate-bounce bg-${particle.color}-400`}
+          className={`absolute w-2 h-2 rounded-full animate-bounce`}
           style={{
             left: `${particle.x}%`,
             top: `${particle.y}%`,
+            backgroundColor: particle.color === 'blue' ? '#3b82f6' : '#ef4444',
             animationDelay: `${Math.random() * 2}s`
           }}
         />
       ))}
 
-      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 max-w-2xl w-full">
+      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 max-w-4xl w-full">
         <h1 className="text-5xl font-bold text-center mb-8 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
           Ultimate Tic Tac Toe
         </h1>
         
-        {/* Game Mode Selector */}
-        <div className="flex justify-center gap-2 mb-6">
-          {['classic', 'time-attack', 'power-ups'].map(mode => (
-            <button
-              key={mode}
-              onClick={() => {
-                setGameMode(mode);
-                resetGame();
-              }}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                gameMode === mode 
-                  ? 'bg-purple-600 text-white shadow-lg' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+        {/* Settings Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Game Mode Selector */}
+          <div className="text-center">
+            <h3 className="font-semibold text-gray-700 mb-2">Game Mode</h3>
+            <div className="flex flex-wrap justify-center gap-1">
+              {['classic', 'time-attack', 'power-ups'].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    setGameMode(mode);
+                    resetGame();
+                  }}
+                  className={`px-3 py-1 rounded-lg font-semibold transition-all text-sm ${
+                    gameMode === mode 
+                      ? 'bg-purple-600 text-white shadow-lg' 
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {mode.charAt(0).toUpperCase() + mode.slice(1).replace('-', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* AI Settings */}
+          <div className="text-center">
+            <h3 className="font-semibold text-gray-700 mb-2">AI Mode</h3>
+            <div className="space-y-2">
+              <label className="flex items-center justify-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={aiMode}
+                  onChange={(e) => {
+                    setAiMode(e.target.checked);
+                    resetGame();
+                  }}
+                  className="rounded"
+                />
+                <span className="text-sm">Play vs AI</span>
+              </label>
+              {aiMode && (
+                <select
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  className="px-2 py-1 rounded border text-sm"
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              )}
+            </div>
+          </div>
+
+          {/* Theme Selector */}
+          <div className="text-center">
+            <h3 className="font-semibold text-gray-700 mb-2">Theme</h3>
+            <select
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              className="px-3 py-1 rounded border"
             >
-              {mode.charAt(0).toUpperCase() + mode.slice(1).replace('-', ' ')}
-            </button>
-          ))}
+              <option value="gradient">Gradient</option>
+              <option value="dark">Dark</option>
+              <option value="ocean">Ocean</option>
+              <option value="forest">Forest</option>
+            </select>
+          </div>
         </div>
 
         {/* Board Size Selector */}
         <div className="flex justify-center gap-2 mb-6">
+          <span className="self-center font-semibold text-gray-700 mr-2">Board Size:</span>
           {[3, 4, 5].map(size => (
             <button
               key={size}
@@ -302,58 +522,83 @@ export default function TicTacToe() {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="text-center">
               <div className="font-bold text-blue-600 mb-2">Player X Powers</div>
-              <div className="flex gap-2 justify-center">
+              <div className="flex gap-1 justify-center flex-wrap">
                 <button
                   onClick={() => usePowerUp('freeze')}
-                  disabled={powerUps.X.freeze === 0 || !isXNext}
-                  className="px-3 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600"
+                  disabled={powerUps.X.freeze === 0 || !isXNext || (aiMode && !isXNext)}
+                  className="px-2 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600 text-sm"
                 >
-                  ❄️ Freeze ({powerUps.X.freeze})
+                  ❄️ ({powerUps.X.freeze})
                 </button>
                 <button
                   onClick={() => usePowerUp('double')}
-                  disabled={powerUps.X.double === 0 || !isXNext}
-                  className="px-3 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600"
+                  disabled={powerUps.X.double === 0 || !isXNext || (aiMode && !isXNext)}
+                  className="px-2 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600 text-sm"
                 >
-                  ⚡ Double ({powerUps.X.double})
+                  ⚡ ({powerUps.X.double})
+                </button>
+                <button
+                  onClick={() => usePowerUp('bomb')}
+                  disabled={powerUps.X.bomb === 0 || !isXNext || (aiMode && !isXNext)}
+                  className="px-2 py-1 bg-blue-500 text-white rounded disabled:opacity-30 hover:bg-blue-600 text-sm"
+                >
+                  💣 ({powerUps.X.bomb})
                 </button>
               </div>
             </div>
             <div className="text-center">
-              <div className="font-bold text-red-600 mb-2">Player O Powers</div>
-              <div className="flex gap-2 justify-center">
+              <div className="font-bold text-red-600 mb-2">{aiMode ? 'AI' : 'Player O'} Powers</div>
+              <div className="flex gap-1 justify-center flex-wrap">
                 <button
                   onClick={() => usePowerUp('freeze')}
-                  disabled={powerUps.O.freeze === 0 || isXNext}
-                  className="px-3 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600"
+                  disabled={powerUps.O.freeze === 0 || isXNext || aiMode}
+                  className="px-2 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600 text-sm"
                 >
-                  ❄️ Freeze ({powerUps.O.freeze})
+                  ❄️ ({powerUps.O.freeze})
                 </button>
                 <button
                   onClick={() => usePowerUp('double')}
-                  disabled={powerUps.O.double === 0 || isXNext}
-                  className="px-3 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600"
+                  disabled={powerUps.O.double === 0 || isXNext || aiMode}
+                  className="px-2 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600 text-sm"
                 >
-                  ⚡ Double ({powerUps.O.double})
+                  ⚡ ({powerUps.O.double})
+                </button>
+                <button
+                  onClick={() => usePowerUp('bomb')}
+                  disabled={powerUps.O.bomb === 0 || isXNext || aiMode}
+                  className="px-2 py-1 bg-red-500 text-white rounded disabled:opacity-30 hover:bg-red-600 text-sm"
+                >
+                  💣 ({powerUps.O.bomb})
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Score Board */}
-        <div className="grid grid-cols-3 gap-4 mb-6 text-center">
-          <div className="bg-blue-100 rounded-lg p-4 border border-blue-200">
-            <div className="text-2xl font-bold text-blue-600 mb-1">X</div>
-            <div className="text-2xl font-bold text-blue-800">{scores.X}</div>
+        {/* Score Board and Stats */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-blue-100 rounded-lg p-3 border border-blue-200">
+              <div className="text-xl font-bold text-blue-600 mb-1">X</div>
+              <div className="text-xl font-bold text-blue-800">{scores.X}</div>
+            </div>
+            <div className="bg-gray-100 rounded-lg p-3 border border-gray-200">
+              <div className="text-sm font-bold text-gray-600 mb-1">Draws</div>
+              <div className="text-xl font-bold text-gray-800">{scores.draws}</div>
+            </div>
+            <div className="bg-red-100 rounded-lg p-3 border border-red-200">
+              <div className="text-xl font-bold text-red-600 mb-1">{aiMode ? 'AI' : 'O'}</div>
+              <div className="text-xl font-bold text-red-800">{scores.O}</div>
+            </div>
           </div>
-          <div className="bg-gray-100 rounded-lg p-4 border border-gray-200">
-            <div className="text-lg font-bold text-gray-600 mb-1">Draws</div>
-            <div className="text-2xl font-bold text-gray-800">{scores.draws}</div>
-          </div>
-          <div className="bg-red-100 rounded-lg p-4 border border-red-200">
-            <div className="text-2xl font-bold text-red-600 mb-1">O</div>
-            <div className="text-2xl font-bold text-red-800">{scores.O}</div>
+          
+          <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+            <div className="text-sm font-bold text-yellow-700 mb-1">Game Stats</div>
+            <div className="text-xs text-yellow-600 space-y-1">
+              <div>Total Games: {gameStats.totalGames}</div>
+              <div>Win Streak: {gameStats.currentStreak} ({gameStats.streakPlayer || 'None'})</div>
+              <div>Best Streak: {gameStats.longestWinStreak}</div>
+            </div>
           </div>
         </div>
 
@@ -361,17 +606,17 @@ export default function TicTacToe() {
         <div className="text-center mb-6">
           {winner ? (
             <div className="text-3xl font-bold text-green-600 animate-bounce">
-              🎉 Player {winner} Wins! 🎉
+              🎉 {aiMode && winner === 'O' ? 'AI' : `Player ${winner}`} Wins! 🎉
             </div>
           ) : isDraw ? (
             <div className="text-3xl font-bold text-orange-600">
-              🤝 It&apos;s a Draw! 🤝
+              🤝 It's a Draw! 🤝
             </div>
           ) : (
             <div className={`text-xl font-semibold ${frozenPlayer === (isXNext ? 'X' : 'O') ? 'text-blue-400' : 'text-gray-700'}`}>
-              {frozenPlayer === (isXNext ? 'X' : 'O') ? `❄️ Player ${isXNext ? 'X' : 'O'} is Frozen!` : 
-               doubleMove ? `⚡ Player ${isXNext ? 'X' : 'O'} gets another turn!` :
-               `Player ${isXNext ? 'X' : 'O'}&apos;s Turn`}
+              {frozenPlayer === (isXNext ? 'X' : 'O') ? `❄️ ${isXNext ? 'Player X' : (aiMode ? 'AI' : 'Player O')} is Frozen!` : 
+               doubleMove ? `⚡ ${isXNext ? 'Player X' : (aiMode ? 'AI' : 'Player O')} gets another turn!` :
+               `${isXNext ? 'Player X' : (aiMode ? 'AI' : 'Player O')}'s Turn${aiMode && !isXNext ? ' (Thinking...)' : ''}`}
             </div>
           )}
         </div>
@@ -392,14 +637,17 @@ export default function TicTacToe() {
             New Game
           </button>
           <button
-            onClick={() => setScores({ X: 0, O: 0, draws: 0 })}
+            onClick={() => {
+              setScores({ X: 0, O: 0, draws: 0 });
+              setGameStats({ totalGames: 0, longestWinStreak: 0, currentStreak: 0, streakPlayer: null });
+            }}
             className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-semibold"
           >
-            Reset Scores
+            Reset All
           </button>
           <button
             onClick={undoLastMove}
-            disabled={moveHistory.length === 0}
+            disabled={moveHistory.length === 0 || aiMode}
             className="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors duration-200 font-semibold disabled:opacity-50"
           >
             Undo Move
@@ -408,10 +656,9 @@ export default function TicTacToe() {
 
         {/* Instructions */}
         <div className="mt-6 text-center text-sm text-gray-600 space-y-1">
-          <p><strong>Classic:</strong> Traditional Tic Tac Toe</p>
-          <p><strong>Time Attack:</strong> 10 seconds per turn!</p>
-          <p><strong>Power-ups:</strong> Freeze opponent or get double moves!</p>
-          <p>Try different board sizes for extra challenge!</p>
+          <p><strong>Classic:</strong> Traditional Tic Tac Toe • <strong>Time Attack:</strong> 10 seconds per turn!</p>
+          <p><strong>Power-ups:</strong> ❄️ Freeze opponent • ⚡ Double move • 💣 Remove opponent piece</p>
+          <p><strong>AI Mode:</strong> Challenge the computer at different difficulty levels!</p>
         </div>
       </div>
     </div>
