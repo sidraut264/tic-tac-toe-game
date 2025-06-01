@@ -15,21 +15,21 @@ export default function TicTacToe() {
     [0, 4, 8], [2, 4, 6] // diagonals
   ];
 
-  const checkWinner = (squares) => {
-    for (let line of winningLines) {
-      const [a, b, c] = line;
-      if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-        return squares[a];
-      }
-    }
-    return null;
-  };
-
-  const checkDraw = (squares) => {
-    return squares.every(square => square !== null);
-  };
-
   useEffect(() => {
+    const checkWinner = (squares) => {
+      for (let line of winningLines) {
+        const [a, b, c] = line;
+        if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
+          return squares[a];
+        }
+      }
+      return null;
+    };
+
+    const checkDraw = (squares) => {
+      return squares.every(square => square !== null);
+    };
+
     const gameWinner = checkWinner(board);
     const gameDraw = checkDraw(board);
     
